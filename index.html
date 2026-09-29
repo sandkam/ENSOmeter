@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ENSO Monitor – El Niño / La Niña Index</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#fff;--fg:#1c2733;--mut:#5b6b7a;--card:#f3f6f9;--warm:#d9534f;--cool:#2f7fd1}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1720;--fg:#e6edf3;--mut:#93a4b5;--card:#182330}}
+body{margin:0;font:16px/1.6 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:920px;margin:auto;padding:24px 16px}
+.card{background:var(--card);border-radius:12px;padding:16px 20px;margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.big{font-size:2rem;font-weight:700}.mut{color:var(--mut);font-size:.9rem}
+button{border:1px solid var(--mut);background:none;color:var(--fg);border-radius:8px;padding:4px 12px;cursor:pointer}
+button.on{background:var(--fg);color:var(--bg)}
+a{color:var(--cool)}
+</style>
+</head>
+<body><main>
+<h1>ENSO Monitor</h1>
+<p class="mut">El Niño–Southern Oscillation: Niño 3.4 sea-surface-temperature anomaly. <span id="upd"></span></p>
+
+<div class="grid">
+  <div class="card"><div class="mut">Latest weekly Niño 3.4 anomaly</div><div class="big" id="wk">–</div><div class="mut" id="wkd"></div></div>
+  <div class="card"><div class="mut">Live 3-month mean (computed)</div><div class="big" id="tr">–</div><div class="mut" id="trm"></div></div>
+  <div class="card"><div class="mut">Latest official ONI</div><div class="big" id="on">–</div><div class="mut" id="ons"></div></div>
+  <div class="card"><div class="mut">Current state</div><div class="big" id="ph">–</div><div class="mut" id="phs"></div></div>
+</div>
+
+<div class="card">
+  <div style="margin-bottom:8px">Range:
+    <button data-y="0" class="on">All</button> <button data-y="30">30 y</button>
+    <button data-y="10">10 y</button> <button data-y="3">3 y</button></div>
+  <canvas id="c" height="120"></canvas>
+  <div class="mut">Values in °C. Dashed lines = ±0.5 °C thresholds.</div>
+</div>
+
+<h2>What is it?</h2>
+<p>Every few years the equatorial Pacific swings between a warm phase (<b style="color:var(--warm)">El Niño</b>) and a cool phase (<b style="color:var(--cool)">La Niña</b>), with <i>neutral</i> in between. These swings shift rainfall, storm tracks and temperatures worldwide, and El Niño years tend to raise global mean temperature.</p>
+<ul>
+<li><b>El Niño:</b> weakened trade winds, warm water spreads east; wetter in Peru/Ecuador and southern USA, drier in Indonesia, Australia and southern Africa.</li>
+<li><b>La Niña:</b> stronger trade winds, cold upwelling in the east; the reverse pattern, and often more active Atlantic hurricane seasons.</li>
+<li><b>Strength (ONI):</b> weak 0.5–0.9, moderate 1.0–1.4, strong 1.5–1.9, very strong ≥ 2.0 (same for negative values).</li>
+</ul>
+
+<h2>Methodology</h2>
+<ol>
+<li><b>Region:</b> Niño 3.4 box, 5°N–5°S, 170°W–120°W in the central Pacific.</li>
+<li><b>Anomaly:</b> the SST minus the climatological average for that calendar period. NOAA uses 30-year base periods (ERSSTv5), updated every 5 years and centered on each date; weekly OISST data use 1991–2020.</li>
+<li><b>ONI (Oceanic Niño Index):</b> the 3-month running mean of monthly Niño 3.4 anomalies (e.g. DJF, JFM, FMA...).</li>
+<li><b>Episode definition:</b> NOAA declares El Niño / La Niña when ONI is ≥ +0.5 / ≤ −0.5 °C for at least 5 consecutive overlapping seasons (and the atmosphere responds).</li>
+<li><b>"Live" value on this page:</b> each day a GitHub Action downloads NOAA CPC's weekly OISST Niño 3.4 anomalies, averages them per month, and takes the 3-month running mean. The last months are partial and may be revised. The official ONI (blue line) lags by about a month.</li>
+</ol>
+<p class="mut">Note: NOAA CPC has been moving toward a <i>relative</i> ONI (RONI), which subtracts the tropics-wide warming trend. This page shows the traditional ONI.</p>
+
+<h2>Outlook / projections</h2>
+<p>Projections come from dynamical and statistical ensemble models, not from this page. Use the official sources, which update monthly (second Thursday):</p>
+<ul>
+<li><a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/">NOAA CPC ENSO Diagnostic Discussion</a> (status and probabilities per season)</li>
+<li><a href="https://iri.columbia.edu/our-expertise/climate/forecasts/enso/current/">IRI/CPC model plume</a> (all model forecasts of Niño 3.4)</li>
+<li><a href="https://www.bom.gov.au/climate/enso/">Australian BoM ENSO outlook</a></li>
+</ul>
+
+<p class="mut">Data: NOAA Climate Prediction Center. Not an official forecast.</p>
+</main>
+<script>
+const dec=s=>{const [y,m]=s.slice(0,7).split("-");return +y+(+m-.5)/12};
+const decD=s=>{const d=new Date(s);return d.getUTCFullYear()+(d.getUTCMonth()+d.getUTCDate()/31)/12};
+const phase=v=>v>=.5?["El Niño","var(--warm)"]:v<=-.5?["La Niña","var(--cool)"]:["Neutral","var(--fg)"];
+const strength=v=>{const a=Math.abs(v);return a<.5?"":a<1?"weak":a<1.5?"moderate":a<2?"strong":"very strong"};
+let chart,D;
+fetch("data.json").then(r=>r.json()).then(d=>{
+  D=d;
+  upd.textContent="Updated "+d.updated+".";
+  const w=d.weekly.at(-1), o=d.oni.at(-1), t=d.trailing_3m;
+  wk.textContent=w.a.toFixed(1)+" °C"; wkd.textContent="week of "+w.d;
+  tr.textContent=t.value.toFixed(2)+" °C"; trm.textContent=t.months[0]+" … "+t.months[2];
+  on.textContent=o.a.toFixed(1)+" °C"; ons.textContent="season "+o.s+" ("+o.m+")";
+  const [p,col]=phase(t.value); ph.textContent=p; ph.style.color=col;
+  phs.textContent=(strength(t.value)||"within ±0.5 °C")+" (based on live 3-month mean)";
+  draw(0);
+});
+function draw(years){
+  const min=years?Math.max(...D.weekly.map(w=>decD(w.d)))-years:0;
+  const f=a=>a.filter(p=>p.x>=min);
+  const oni=f(D.oni.map(p=>({x:dec(p.m),y:p.a})));
+  const live=f(D.live_oni.map(p=>({x:dec(p.m),y:p.a})));
+  const wk=f(D.weekly.map(p=>({x:decD(p.d),y:p.a})));
+  const x0=oni.length?oni[0].x:min, x1=Math.max(...wk.map(p=>p.x));
+  const th=v=>({label:"",data:[{x:x0,y:v},{x:x1,y:v}],borderDash:[5,5],borderColor:v>0?"#d9534f":"#2f7fd1",pointRadius:0,borderWidth:1});
+  const ds=[
+    {label:"Official ONI",data:oni,borderColor:"#2f7fd1",borderWidth:2,pointRadius:0,tension:.2},
+    {label:"Live 3-month (computed)",data:live,borderColor:"#e8a33d",borderWidth:2,pointRadius:0},
+    {label:"Weekly Niño 3.4",data:wk,borderColor:"#8884",borderWidth:1,pointRadius:0},
+    th(.5),th(-.5)];
+  if(chart)chart.destroy();
+  chart=new Chart(c,{type:"line",data:{datasets:ds},options:{parsing:false,animation:false,
+    interaction:{mode:"nearest",intersect:false},
+    scales:{x:{type:"linear",ticks:{callback:v=>Math.round(v)}},y:{title:{display:true,text:"°C anomaly"}}},
+    plugins:{legend:{labels:{filter:i=>i.text}}}}});
+}
+document.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on"); draw(+b.dataset.y)});
+</script>
+</body></html>
